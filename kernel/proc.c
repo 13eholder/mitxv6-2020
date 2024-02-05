@@ -126,6 +126,9 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+  
+  // do not trace any syscall
+  p->mask=0;
 
   return p;
 }
@@ -294,6 +297,8 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+
+  np->mask=p->mask;
 
   release(&np->lock);
 
@@ -692,4 +697,11 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// my implementations
+int trace(int mask){
+    struct proc* p = myproc();
+    p->mask=mask;
+    return 0;
 }
