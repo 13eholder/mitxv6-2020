@@ -105,3 +105,12 @@ sys_trace(void)
     return -1;
   return trace(n);
 }
+
+uint64
+sys_sysinfo(void)
+{
+  uint64 tmp;
+  if(argaddr(0, &tmp)<0)
+    return -1;
+  return fill_sysinfo(tmp);
+}

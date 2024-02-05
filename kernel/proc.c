@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+// #include "sysinfo.h"
 
 struct cpu cpus[NCPU];
 
@@ -703,5 +704,22 @@ procdump(void)
 int trace(int mask){
     struct proc* p = myproc();
     p->mask=mask;
+    return 0;
+}
+
+uint64 get_unused_procs(void){
+    uint64 nproc=0;
+    for(int i=0;i<NPROC;i++){
+        if(proc[i].state!=UNUSED)
+            ++nproc;
+    }
+    return nproc;
+}
+
+int fill_sysinfo(uint64 addr){
+    struct proc* p=myproc();
+    uint64 data[2]={kfreemem(),get_unused_procs()};
+    if(copyout(p->pagetable, addr, (char *)&data, sizeof(data)) < 0)
+        return -1;  
     return 0;
 }
