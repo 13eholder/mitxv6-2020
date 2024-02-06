@@ -172,6 +172,7 @@ uint64          uvmdealloc(pagetable_t, uint64, uint64);
 void            kvminit_user(pagetable_t kpagetable);
 void            kvmmap_user(pagetable_t kpagetable,uint64 va, uint64 pa, uint64 sz, int perm);
 void            kvmuserhart(pagetable_t kpagetable);
+uint64          uvmdealloc_v2(pagetable_t pagetable, uint64 oldsz, uint64 newsz);
 #ifdef SOL_COW
 #else
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
@@ -185,7 +186,11 @@ int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t);
 void            vmprint_dfs(pagetable_t,int);
+int             uvmcopy_v2(pagetable_t src, pagetable_t dst, uint64 oldsz, uint64 newsz);
 
+// vmcopyin.c
+int             copyin_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len);
+int             copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max);
 
 // plic.c
 void            plicinit(void);
