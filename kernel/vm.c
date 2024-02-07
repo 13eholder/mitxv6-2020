@@ -64,6 +64,16 @@ void kvminit_user(pagetable_t kpagetable)
   kvmmap_user(kpagetable,TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 }
 
+// map user page table into kernel page table
+void kvminit_user_share(pagetable_t kpagetable) {
+  for (int i = 1; i < 512; i++)
+    kpagetable[i] = kernel_pagetable[i];
+  kvmmap_user(kpagetable,UART0, UART0, PGSIZE, PTE_R | PTE_W);
+  kvmmap_user(kpagetable,VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+  kvmmap_user(kpagetable,CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+  kvmmap_user(kpagetable,PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+}
+
 // Switch h/w page table register to the kernel's page table,
 // and enable paging.
 void

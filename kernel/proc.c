@@ -114,7 +114,8 @@ found:
   }
 
   // copy kernel page table
-  p->kpagetable = proc_kpagetable();
+  //   p->kpagetable = proc_kpagetable();
+  p->kpagetable=proc_kpagetable_share();
   if(p->kpagetable == 0){
     freeproc(p);
     release(&p->lock);
@@ -162,7 +163,8 @@ freeproc(struct proc *p)
   // free kpagetable
   uvmunmap(p->kpagetable, p->kstack, 1, 1);
   p->kstack = 0;
-  proc_freekpagetable(p->kpagetable);
+  //   proc_freekpagetable(p->kpagetable);
+  proc_freekpagetable_share(p->kpagetable);
 }
 
 // Create a user page table for a given process,
@@ -211,6 +213,15 @@ proc_kpagetable()
   return pagetable;
 }
 
+pagetable_t proc_kpagetable_share() {
+  pagetable_t pagetable;
+  pagetable = uvmcreate();
+  if (pagetable == 0)
+    return 0;
+  kvminit_user_share(pagetable);
+  return pagetable;
+}
+
 // Free a process's page table, and free the
 // physical memory it refers to.
 void
@@ -233,6 +244,21 @@ void proc_freekpagetable(pagetable_t kpagetable) {
     }
   }
   kfree((void*)kpagetable);
+}
+
+void proc_freekpagetable_share(pagetable_t kpagetable) {
+  pte_t pte = kpagetable[0];
+  pagetable_t level1= (pagetable_t)PTE2PA(pte);
+  for (int i = 0; i < 512; i++) {
+    pte_t pte = level1[i];
+    if (pte & PTE_V) {
+      uint64 level2 = PTE2PA(pte);
+      kfree((void *)level2);
+      level1[i] = 0;      
+    }
+  }
+  kfree((void *)level1);
+  kfree((void *)kpagetable);
 }
 
 // a user program that calls exec("/init")

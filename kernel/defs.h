@@ -110,6 +110,8 @@ int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 pagetable_t     proc_kpagetable(void);
 void            proc_freekpagetable(pagetable_t kpagetable);
+pagetable_t     proc_kpagetable_share(void);
+void            proc_freekpagetable_share(pagetable_t kpagetable);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -170,6 +172,7 @@ void            uvminit(pagetable_t, uchar *, uint);
 uint64          uvmalloc(pagetable_t, uint64, uint64);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
 void            kvminit_user(pagetable_t kpagetable);
+void            kvminit_user_share(pagetable_t kpagetable);
 void            kvmmap_user(pagetable_t kpagetable,uint64 va, uint64 pa, uint64 sz, int perm);
 void            kvmuserhart(pagetable_t kpagetable);
 uint64          uvmdealloc_v2(pagetable_t pagetable, uint64 oldsz, uint64 newsz);
