@@ -65,6 +65,19 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if((r_scause()==13 || r_scause()==15)&&r_stval()<p->sz && r_stval()>=p->trapframe->sp){
+    uint64 stval=r_stval();
+    // printf("page fault: %p\n",stval);
+    // printf("p->sz=%p\n",p->sz);
+    char* pa;
+    if((pa=kalloc())==0){
+        p->killed=1;
+        // printf("run out of pysical memory\n");
+    }else{
+        memset(pa,0,PGSIZE);
+        uint64 va=PGROUNDDOWN(stval);
+        mappages(p->pagetable,va,PGSIZE,(uint64)pa,PTE_W|PTE_X|PTE_R|PTE_U);
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
