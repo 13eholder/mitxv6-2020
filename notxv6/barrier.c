@@ -22,6 +22,10 @@ barrier_init(void)
   bstate.nthread = 0;
 }
 
+#define acquire(lock) (pthread_mutex_lock(&lock))
+#define release(lock) (pthread_mutex_unlock(&lock))
+#define cv_wait(cond,lock) (pthread_cond_wait(&cond,&lock))
+#define notify(cond,lock) (pthread_cond_broadcast(&cond))
 static void 
 barrier()
 {
@@ -30,7 +34,26 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
-  
+    acquire(bstate.barrier_mutex);
+    bstate.nthread++;
+
+    if (bstate.nthread < nthread) {
+        // 等待其他线程到达屏障
+        cv_wait(bstate.barrier_cond, bstate.barrier_mutex);
+    } else {
+        // 最后一个到达屏障的线程
+        bstate.nthread = 0;
+        bstate.round++;
+        // 通知所有等待的线程继续
+        notify(bstate.barrier_cond, bstate.barrier_mutex);
+    }
+
+    // 等待轮次改变
+    // while (round == bstate.round) {
+    //     cv_wait(bstate.barrier_cond, bstate.barrier_mutex);
+    // }
+
+    release(bstate.barrier_mutex);
 }
 
 static void *
@@ -45,6 +68,7 @@ thread(void *xa)
     assert (i == t);
     barrier();
     usleep(random() % 100);
+    // printf("round %d end\n",i);
   }
 
   return 0;
