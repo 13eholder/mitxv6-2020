@@ -18,15 +18,20 @@ struct run {
   struct run *next;
 };
 
-struct {
+struct Memory{
   struct spinlock lock;
   struct run *freelist;
-} kmem;
+  char name[10];
+} kmem,kmems[NCPU];
 
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  for(int i=0;i<NCPU;i++){
+    snprintf(kmems[i].name, 9, "kmem%d", i);
+    initlock(&kmems[i].lock, kmems[i].name);
+  }
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -46,6 +51,24 @@ freerange(void *pa_start, void *pa_end)
 void
 kfree(void *pa)
 {
+    return kfree_v2(pa);
+//   struct run *r;
+
+//   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+//     panic("kfree");
+
+//   // Fill with junk to catch dangling refs.
+//   memset(pa, 1, PGSIZE);
+
+//   r = (struct run*)pa;
+
+//   acquire(&kmem.lock);
+//   r->next = kmem.freelist;
+//   kmem.freelist = r;
+//   release(&kmem.lock);
+}
+
+void kfree_v2(void *pa){
   struct run *r;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
@@ -55,11 +78,14 @@ kfree(void *pa)
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
-
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  push_off();
+  int id=cpuid();
+  struct Memory* kmem=&kmems[id];
+  pop_off();
+  acquire(&kmem->lock);
+  r->next = kmem->freelist;
+  kmem->freelist = r;
+  release(&kmem->lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -68,15 +94,63 @@ kfree(void *pa)
 void *
 kalloc(void)
 {
-  struct run *r;
+    return kalloc_v2();
+//   struct run *r;
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
+//   acquire(&kmem.lock);
+//   r = kmem.freelist;
+//   if(r)
+//     kmem.freelist = r->next;
+//   release(&kmem.lock);
+
+//   if(r)
+//     memset((char*)r, 5, PGSIZE); // fill with junk
+//   return (void*)r;
+}
+
+void* steal(int id);
+void * kalloc_from(struct Memory* kmem);
+
+void * kalloc_from(struct Memory* kmem){
+  struct run *r;
+  acquire(&kmem->lock);
+  r = kmem->freelist;
   if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+    kmem->freelist = r->next;
+  release(&kmem->lock);
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+void* steal(int id){
+    struct run* r;
+    for(int i=0;i<NCPU;i++){
+        if(i==id)continue;
+        struct Memory* kmem = &kmems[i];
+        r=kalloc_from(kmem);
+        if(r) return r;
+    }
+    return 0;
+}
+
+void* kalloc_v2(void){
+  struct run *r;
+  push_off();
+  int id=cpuid();
+  struct Memory* kmem=&kmems[id];
+  pop_off();
+  acquire(&kmem->lock);
+  r = kmem->freelist;
+  if(r){
+    kmem->freelist = r->next;
+    memset((char*)r, 5, PGSIZE); // fill with junk
+    release(&kmem->lock);
+  }else{
+    release(&kmem->lock);
+    r = steal(id);
+  }
+  return (void*)r;
+}
+
+
