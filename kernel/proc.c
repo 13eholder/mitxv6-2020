@@ -5,10 +5,11 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
-
+#include "fcntl.h"
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
+struct VMA vmas[NOFILE];
 
 struct proc *initproc;
 
@@ -133,6 +134,7 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+  memset(p->vma,0,sizeof(p->vma));
 
   return p;
 }
@@ -700,4 +702,71 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+uint64 do_mmap(uint64 addr,int len,int prot,int flags,int fd,int offset){
+    struct VMA* vma=0;
+    struct proc* p= myproc();
+    struct file* f=p->ofile[fd];
+    if(flags&MAP_SHARED ){
+        if((prot&PROT_READ)&&!readable(f))return (uint64)-1;
+        if((prot&PROT_WRITE)&&!writable(f))return (uint64)-1;
+    }
+    for(int i=0;i<NOFILE;i++)
+        if(!vmas[i].using)
+            vma= &vmas[i];
+    vma->using=1;
+    vma->addr= addr ? addr : p->sz;
+    vma->len=len;
+    vma->prot=prot;
+    vma->flags=flags;
+    vma->off=offset;
+    vma->fptr=filedup(f);
+    // int pos=0;
+    for(int i=0;i<NOFILE;i++)
+        if(p->vma[i]==0){
+            p->vma[i]=vma;
+            break;
+        }
+    p->sz+=len;
+    // printf("mmap args: addr=%p,len=%d,prot=%p,flags=%p,fd=%d,off=%d,vma_num_of_p=%d\n",vma->addr,len,prot,flags,fd,offset,pos);
+    return vma->addr;
+}
+
+uint64 do_munmap(uint64 addr,int length){
+    struct VMA* vma=0;
+    struct proc* p=myproc();
+    int pos=0;
+    for(int i=0;i<NOFILE;i++){
+        if(p->vma[i]&&p->vma[i]->addr==addr){
+            vma=p->vma[i];
+            pos=i;
+            break;
+        }
+    }
+    if(!vma)return -1;
+    if(vma->flags&MAP_SHARED){
+        my_write(vma->fptr, addr,vma->off ,length);
+    }
+    int num= length/PGSIZE;
+    for(int i=0;i<num;i++){
+        if(vma->page_mapped){
+            if(walkaddr(p->pagetable, vma->addr))
+                uvmunmap(p->pagetable, vma->addr, 1, 1);
+            vma->page_mapped--;
+            vma->bytes_mapped= vma->bytes_mapped>=PGSIZE? (vma->bytes_mapped-PGSIZE):0;
+            vma->len-=PGSIZE;
+            vma->addr+=PGSIZE;
+        }else {
+            break;
+        }
+    }
+    if(vma->len==0){
+        fileclose(vma->fptr);
+        vma->addr=vma->bytes_mapped=vma->page_mapped=vma->flags=vma->prot=vma->len=vma->off=vma->using=0;
+        vma->fptr=0;
+        p->vma[pos]=0;
+        // printf("release vma %d\n",vma-vmas);
+    }
+    return 0;
 }

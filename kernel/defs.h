@@ -33,7 +33,10 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
-
+int my_read(struct file* f,uint64 va,int off,int sz);
+int my_write(struct file *f, uint64 addr, int off,int n);
+int readable(struct file* f);
+int writable(struct file* f);
 // fs.c
 void            fsinit(int);
 int             dirlink(struct inode*, char*, uint);
@@ -105,7 +108,8 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
-
+uint64 do_mmap(uint64 addr,int len,int prot,int flags,int fd,int offset);
+uint64 do_munmap(uint64 addr,int length);
 // swtch.S
 void            swtch(struct context*, struct context*);
 
