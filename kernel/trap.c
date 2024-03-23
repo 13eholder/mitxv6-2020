@@ -92,8 +92,7 @@ usertrap(void)
             }
             uint64 va= PGROUNDDOWN(stval);
             mappages(p->pagetable, va, PGSIZE, (uint64)mem, perm);
-            vma->bytes_mapped+=my_read(vma->fptr, va, vma->off+vma->bytes_mapped, PGSIZE);
-            vma->page_mapped++;
+            my_read(vma->fptr, va, vma->off+ va - vma->addr, PGSIZE);
         }else{
             printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
             printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

@@ -88,8 +88,6 @@ struct VMA{
     int flags;
     int using;
     int off;
-    int page_mapped;
-    int bytes_mapped;
     struct file* fptr;
 };
 // Per-process state

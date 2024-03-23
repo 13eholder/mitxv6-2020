@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 #include "fcntl.h"
+#include "defs.h"
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -159,6 +160,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  memset(p->vma,0,sizeof(p->vma));
 }
 
 // Create a user page table for a given process,
@@ -276,6 +278,21 @@ fork(void)
     return -1;
   }
 
+  for(int i=0;i<NOFILE;i++){
+    if(p->vma[i]){
+        for(int j=0;j<NOFILE;j++){
+            if(!vmas[j].using){
+                np->vma[i]=&vmas[j];
+                break;
+            }
+        }
+        // printf("in fork,vma_%d_of_p,addr=%p,len=%d\n",i,p->vma[i]->addr,p->vma[i]->len);
+        memmove(np->vma[i],p->vma[i],sizeof(struct VMA));
+        filedup(np->vma[i]->fptr);
+        // printf("in fork,vma_%d_of_np,addr=%p,len=%d\n",i,np->vma[i]->addr,np->vma[i]->len);
+    }
+  }
+
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
@@ -345,6 +362,19 @@ exit(int status)
 
   if(p == initproc)
     panic("init exiting");
+  for(int i=0;i<NOFILE;i++){
+    if(p->vma[i]){
+        struct VMA* vma=p->vma[i];
+        if(vma->flags&MAP_SHARED && vma->prot&PROT_WRITE){
+            my_write(vma->fptr, vma->addr,vma->off ,vma->len);
+        }
+        uvmunmap(p->pagetable, vma->addr, vma->len/PGSIZE, 1);
+        fileclose(vma->fptr);
+        vma->addr=vma->flags=vma->prot=vma->len=vma->off=vma->using=0;
+        vma->fptr=0;
+        p->vma[i]=0;
+    }
+  }
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
@@ -745,28 +775,18 @@ uint64 do_munmap(uint64 addr,int length){
         }
     }
     if(!vma)return -1;
-    if(vma->flags&MAP_SHARED){
+    if(vma->flags&MAP_SHARED && vma->prot&PROT_WRITE){
         my_write(vma->fptr, addr,vma->off ,length);
     }
-    int num= length/PGSIZE;
-    for(int i=0;i<num;i++){
-        if(vma->page_mapped){
-            if(walkaddr(p->pagetable, vma->addr))
-                uvmunmap(p->pagetable, vma->addr, 1, 1);
-            vma->page_mapped--;
-            vma->bytes_mapped= vma->bytes_mapped>=PGSIZE? (vma->bytes_mapped-PGSIZE):0;
-            vma->len-=PGSIZE;
-            vma->addr+=PGSIZE;
-        }else {
-            break;
-        }
-    }
+    vma->len-=length;
+    vma->addr+=length;
+    uvmunmap(p->pagetable, addr, length/PGSIZE, 1);
+
     if(vma->len==0){
         fileclose(vma->fptr);
-        vma->addr=vma->bytes_mapped=vma->page_mapped=vma->flags=vma->prot=vma->len=vma->off=vma->using=0;
+        vma->addr=vma->flags=vma->prot=vma->len=vma->off=vma->using=0;
         vma->fptr=0;
         p->vma[pos]=0;
-        // printf("release vma %d\n",vma-vmas);
     }
     return 0;
 }
